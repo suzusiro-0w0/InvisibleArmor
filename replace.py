@@ -1,21 +1,20 @@
 import os
+import zipfile
 from PIL import Image
+
+mods_path = "../../mods"
 
 def make_image_transparent(image_path):
     try:
         with Image.open(image_path) as img:
-            # 画像をRGBAモードに変換
             img = img.convert("RGBA")
-            # 元の解像度を保持したまま透明化
             transparent_data = [(255, 255, 255, 0) for _ in range(img.width * img.height)]
             img.putdata(transparent_data)
-            
-            # 元のファイルをバックアップ
+
             backup_path = image_path + ".bak"
-            if not os.path.exists(backup_path):  # すでにバックアップがない場合のみ保存
+            if not os.path.exists(backup_path):
                 os.rename(image_path, backup_path)
-            
-            # 透明画像として保存
+
             img.save(image_path)
             print(f"Processed: {image_path}")
     except Exception as e:
@@ -28,9 +27,30 @@ def process_directory(directory):
                 file_path = os.path.join(root, file)
                 make_image_transparent(file_path)
 
+def extract_armor_textures_from_mods(mods_dir, dest_assets_dir):
+    for file_name in os.listdir(mods_dir):
+        if file_name.endswith('.jar'):
+            jar_path = os.path.join(mods_dir, file_name)
+            with zipfile.ZipFile(jar_path, 'r') as jar:
+                for member in jar.namelist():
+                    if member.lower().endswith(('.png', '.jpg', '.jpeg')) \
+                       and member.startswith('assets/') \
+                       and 'textures/models/armor/' in member:
+                        # assets/ 部分を取り除き、assets_dir直下に展開する
+                        relative_path = member[len('assets/'):]
+                        dest_path = os.path.join(dest_assets_dir, relative_path)
+                        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+
+                        with jar.open(member) as src, open(dest_path, 'wb') as dst:
+                            dst.write(src.read())
+
 if __name__ == "__main__":
-    # 現在のディレクトリにあるAssetsディレクトリから
-    current_directory = os.path.join(os.getcwd(), "assets")
-    print(f"Starting from directory: {current_directory}")
-    process_directory(current_directory)
+    current_directory = os.getcwd()
+    assets_dir = os.path.join(current_directory, "assets")
+
+    # modsフォルダからアーマーテクスチャを抽出
+    extract_armor_textures_from_mods(mods_path, assets_dir)
+
+    # 抽出後、assets以下のディレクトリを走査して画像を透明化
+    process_directory(assets_dir)
     print("Processing completed.")
